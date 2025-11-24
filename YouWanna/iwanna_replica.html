@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I Wanna 经典关卡复刻</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #fff;
+            display: block;
+            margin: 20px auto;
+        }
+        .info {
+            text-align: center;
+            margin: 20px;
+        }
+        .controls {
+            text-align: center;
+            margin: 10px;
+            font-size: 18px;
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading h2 {
+            color: #fff;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h1>🎮 I Wanna 经典关卡复刻</h1>
+        <p>完全还原经典I Wanna关卡布局</p>
+    </div>
+    
+    <!-- 加载界面 -->
+    <div id="loadingScreen" class="loading">
+        <h2>🏗️ 正在构建关卡...</h2>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="600" style="display: none;"></canvas>
+    
+    <div class="controls" id="gameControls" style="display: none;">
+        <p><strong>操作说明:</strong></p>
+        <p>WASD 或 方向键 - 移动 | 空格键 - 跳跃 (无限跳跃)</p>
+        <p id="deathCount">死亡次数: 0</p>
+        <p><strong>关卡特色:</strong> 经典I Wanna关卡 - 砖墙 + 草皮 + 尖刺</p>
+    </div>
+
+    <script>
+        // I Wanna 关卡复刻游戏
+        class IWannaReplicaGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                
+                // 玩家属性
+                this.player = {
+                    x: 50,
+                    y: 250,  // 修改到砖块上方
+                    width: 24,
+                    height: 24,
+                    vx: 0,
+                    vy: 0,
+                    speed: 200,      // 移动速度
+                    jumpPower: 450,  // 跳跃力度
+                    onGround: false
+                };
+                
+                // 游戏状态
+                this.gravity = 800;
+                this.deathCount = 0;
+                this.keys = {};
+                
+                // 关卡元素
+                this.platforms = [];
+                this.walls = [];
+                this.spikes = [];
+                
+                this.init();
+            }
+            
+            init() {
+                this.createExactLevel();
+                setTimeout(() => this.startGame(), 1000);
+            }
+            
+            createExactLevel() {
+                console.log('🏗️ 按照指导重建关卡...');
+                
+                // 第一步：在屏幕一半位置以下全部放上砖块
+                // 屏幕高度600，一半是300，所以从y=300开始往下全部放砖块
+                for (let x = 0; x < 800; x += 32) {
+                    for (let y = 300; y < 600; y += 32) {
+                        this.walls.push({x: x, y: y, width: 32, height: 32, type: 'brick'});
+                    }
+                }
+                
+                console.log(`基础砖块搭建完成! 墙体: ${this.walls.length}个砖块`);
+                console.log('请告诉我下一步要做什么...');
+            }
+            
+            startGame() {
+                // 隐藏加载界面，显示游戏
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('gameCanvas').style.display = 'block';
+                document.getElementById('gameControls').style.display = 'block';
+                
+                // 键盘事件
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.code] = true;
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.code] = false;
+                });
+                
+                console.log('🎉 I Wanna关卡复刻完成，开始游戏!');
+                
+                // 开始游戏循环
+                this.gameLoop();
+            }
+            
+            update(dt) {
+                // 处理水平移动输入
+                this.player.vx = 0;
+                if (this.keys['KeyA'] || this.keys['ArrowLeft']) {
+                    this.player.vx = -this.player.speed;
+                }
+                if (this.keys['KeyD'] || this.keys['ArrowRight']) {
+                    this.player.vx = this.player.speed;
+                }
+                
+                // 处理跳跃输入 (只有在地面上才能跳跃)
+                if ((this.keys['Space'] || this.keys['KeyW'] || this.keys['ArrowUp']) && this.player.onGround) {
+                    this.player.vy = -this.player.jumpPower;
+                    this.player.onGround = false;
+                }
+                
+                // 应用重力
+                this.player.vy += this.gravity * dt;
+                
+                // 限制下落速度
+                if (this.player.vy > 600) {
+                    this.player.vy = 600;
+                }
+                
+                // 先更新水平位置并检查碰撞
+                const oldX = this.player.x;
+                this.player.x += this.player.vx * dt;
+                
+                // 水平边界检查
+                if (this.player.x < 0) {
+                    this.player.x = 0;
+                }
+                if (this.player.x > 800 - this.player.width) {
+                    this.player.x = 800 - this.player.width;
+                }
+                
+                // 检查水平碰撞
+                if (this.checkHorizontalCollision()) {
+                    this.player.x = oldX; // 恢复位置
+                }
+                
+                // 再更新垂直位置并检查碰撞
+                const oldY = this.player.y;
+                this.player.y += this.player.vy * dt;
+                
+                // 检查垂直碰撞
+                this.checkVerticalCollision(oldY);
+                
+                // 尖刺碰撞检测
+                this.checkSpikeCollisions();
+                
+                // 检查死亡条件
+                if (this.player.y > 650) {
+                    this.playerDie();
+                }
+            }
+            
+            // 检查水平碰撞
+            checkHorizontalCollision() {
+                // 检查墙体碰撞
+                for (let wall of this.walls) {
+                    if (this.isColliding(this.player, wall)) {
+                        return true;
+                    }
+                }
+                
+                // 检查平台碰撞 (平台只有顶部碰撞)
+                for (let platform of this.platforms) {
+                    if (this.isColliding(this.player, platform)) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            // 检查垂直碰撞
+            checkVerticalCollision(oldY) {
+                this.player.onGround = false;
+                
+                // 检查墙体碰撞
+                for (let wall of this.walls) {
+                    if (this.isColliding(this.player, wall)) {
+                        if (this.player.vy > 0) {
+                            // 下落时碰到墙体顶部
+                            this.player.y = wall.y - this.player.height;
+                            this.player.vy = 0;
+                            this.player.onGround = true;
+                        } else if (this.player.vy < 0) {
+                            // 上升时碰到墙体底部
+                            this.player.y = wall.y + wall.height;
+                            this.player.vy = 0;
+                        }
+                        return;
+                    }
+                }
+                
+                // 检查平台碰撞 (只有从上方下落才能站在平台上)
+                for (let platform of this.platforms) {
+                    if (this.player.x < platform.x + platform.width &&
+                        this.player.x + this.player.width > platform.x &&
+                        this.player.y + this.player.height > platform.y &&
+                        this.player.y + this.player.height < platform.y + platform.height + 5 &&
+                        this.player.vy >= 0 &&
+                        oldY + this.player.height <= platform.y) {
+                        
+                        this.player.y = platform.y - this.player.height;
+                        this.player.vy = 0;
+                        this.player.onGround = true;
+                        return;
+                    }
+                }
+            }
+            
+            // 通用碰撞检测函数
+            isColliding(rect1, rect2) {
+                return rect1.x < rect2.x + rect2.width &&
+                       rect1.x + rect1.width > rect2.x &&
+                       rect1.y < rect2.y + rect2.height &&
+                       rect1.y + rect1.height > rect2.y;
+            }
+            
+            checkSpikeCollisions() {
+                for (let spike of this.spikes) {
+                    if (this.player.x < spike.x + spike.width &&
+                        this.player.x + this.player.width > spike.x &&
+                        this.player.y < spike.y + spike.height &&
+                        this.player.y + this.player.height > spike.y) {
+                        
+                        this.playerDie();
+                        break;
+                    }
+                }
+            }
+            
+            playerDie() {
+                this.deathCount++;
+                document.getElementById('deathCount').textContent = `死亡次数: ${this.deathCount}`;
+                
+                // 重置玩家位置
+                this.player.x = 50;
+                this.player.y = 250;  // 修改到砖块上方
+                this.player.vx = 0;
+                this.player.vy = 0;
+                
+                console.log(`💀 玩家死亡! 总死亡次数: ${this.deathCount}`);
+            }
+            
+            render() {
+                // 清空画布 - 天蓝色背景
+                this.ctx.fillStyle = '#87CEEB';
+                this.ctx.fillRect(0, 0, 800, 600);
+                
+                // 绘制墙体 (棕色砖墙纹理)
+                for (let wall of this.walls) {
+                    this.drawBrickWall(wall.x, wall.y, wall.width, wall.height);
+                }
+                
+                // 绘制平台 (绿色草皮)
+                for (let platform of this.platforms) {
+                    this.drawGrassPlatform(platform.x, platform.y, platform.width, platform.height);
+                }
+                
+                // 绘制尖刺 (银灰色)
+                for (let spike of this.spikes) {
+                    this.drawSpike(spike.x, spike.y, spike.type);
+                }
+                
+                // 绘制玩家 (红色小人)
+                this.drawPlayer();
+                
+                // 绘制UI
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = 'bold 20px Arial';
+                this.ctx.strokeStyle = '#000000';
+                this.ctx.lineWidth = 2;
+                
+                const deathText = `Deaths: ${this.deathCount}`;
+                this.ctx.strokeText(deathText, 20, 30);
+                this.ctx.fillText(deathText, 20, 30);
+                
+                const titleText = 'I Wanna 经典关卡复刻';
+                this.ctx.strokeText(titleText, 20, 580);
+                this.ctx.fillText(titleText, 20, 580);
+            }
+            
+            drawBrickWall(x, y, width, height) {
+                // 砖墙基色
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(x, y, width, height);
+                
+                // 砖块纹理
+                this.ctx.fillStyle = '#A0522D';
+                for (let by = 0; by < height; by += 8) {
+                    for (let bx = 0; bx < width; bx += 16) {
+                        const offsetX = (by / 8) % 2 === 0 ? 0 : 8;
+                        this.ctx.fillRect(x + bx + offsetX, y + by, 14, 6);
+                    }
+                }
+                
+                // 砖缝
+                this.ctx.fillStyle = '#654321';
+                for (let by = 0; by < height; by += 8) {
+                    this.ctx.fillRect(x, y + by, width, 1);
+                }
+            }
+            
+            drawGrassPlatform(x, y, width, height) {
+                // 土壤底色
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(x, y, width, height);
+                
+                // 草地表面
+                this.ctx.fillStyle = '#228B22';
+                this.ctx.fillRect(x, y, width, height / 2);
+                
+                // 草叶细节
+                this.ctx.fillStyle = '#32CD32';
+                for (let gx = x; gx < x + width; gx += 2) {
+                    const grassHeight = 2 + Math.random() * 3;
+                    this.ctx.fillRect(gx, y - grassHeight, 1, grassHeight);
+                }
+            }
+            
+            drawSpike(x, y, type) {
+                this.ctx.fillStyle = '#C0C0C0';
+                
+                this.ctx.beginPath();
+                if (type === 'spike_up') {
+                    this.ctx.moveTo(x + 16, y);
+                    this.ctx.lineTo(x, y + 32);
+                    this.ctx.lineTo(x + 32, y + 32);
+                } else if (type === 'spike_down') {
+                    this.ctx.moveTo(x + 16, y + 32);
+                    this.ctx.lineTo(x, y);
+                    this.ctx.lineTo(x + 32, y);
+                } else if (type === 'spike_left') {
+                    this.ctx.moveTo(x, y + 16);
+                    this.ctx.lineTo(x + 32, y);
+                    this.ctx.lineTo(x + 32, y + 32);
+                } else if (type === 'spike_right') {
+                    this.ctx.moveTo(x + 32, y + 16);
+                    this.ctx.lineTo(x, y);
+                    this.ctx.lineTo(x, y + 32);
+                }
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                // 高光效果
+                this.ctx.fillStyle = '#E0E0E0';
+                this.ctx.beginPath();
+                if (type === 'spike_up') {
+                    this.ctx.moveTo(x + 16, y);
+                    this.ctx.lineTo(x + 8, y + 16);
+                    this.ctx.lineTo(x + 16, y + 16);
+                } else if (type === 'spike_down') {
+                    this.ctx.moveTo(x + 16, y + 32);
+                    this.ctx.lineTo(x + 8, y + 16);
+                    this.ctx.lineTo(x + 16, y + 16);
+                }
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+            
+            drawPlayer() {
+                // 玩家身体 - 红色
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.fillRect(this.player.x + 4, this.player.y + 8, 16, 12);
+                
+                // 玩家头部 - 肤色
+                this.ctx.fillStyle = '#FFDBAC';
+                this.ctx.fillRect(this.player.x + 6, this.player.y + 2, 12, 8);
+                
+                // 眼睛
+                this.ctx.fillStyle = '#000000';
+                this.ctx.fillRect(this.player.x + 8, this.player.y + 4, 2, 2);
+                this.ctx.fillRect(this.player.x + 14, this.player.y + 4, 2, 2);
+                
+                // 腿部
+                this.ctx.fillStyle = '#0000FF';
+                this.ctx.fillRect(this.player.x + 6, this.player.y + 20, 3, 4);
+                this.ctx.fillRect(this.player.x + 15, this.player.y + 20, 3, 4);
+            }
+            
+            gameLoop() {
+                const now = Date.now();
+                const dt = (now - (this.lastTime || now)) / 1000;
+                this.lastTime = now;
+                
+                this.update(dt);
+                this.render();
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        // 启动游戏
+        window.addEventListener('load', () => {
+            console.log('=== I Wanna 经典关卡复刻启动 ===');
+            new IWannaReplicaGame();
+        });
+    </script>
+</body>
+</html>

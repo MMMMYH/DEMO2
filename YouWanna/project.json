@@ -1,0 +1,23 @@
+{
+    "name": "YouWanna",
+    "version": "1.0.0",
+    "description": "YouWanna - AI驱动的创新平台跳跃游戏",
+    "main": "src/main.lua",
+    "engine": "cocos2d-x",
+    "language": "lua",
+    "platform": {
+        "wechat": true,
+        "desktop": true,
+        "mobile": true
+    },
+    "settings": {
+        "designResolution": {
+            "width": 800,
+            "height": 600
+        },
+        "fps": 60,
+        "showFPS": true
+    },
+    "author": "MYH",
+    "license": "MIT"
+}

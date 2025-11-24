@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I Wanna 关卡编辑器</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #2c3e50;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .tools {
+            width: 200px;
+            background: #34495e;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .editor {
+            flex: 1;
+            background: #34495e;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .tool-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .tool-btn:hover {
+            background: #2980b9;
+        }
+        
+        .tool-btn.active {
+            background: #e74c3c;
+        }
+        
+        canvas {
+            border: 2px solid #fff;
+            cursor: crosshair;
+            background: #87CEEB;
+        }
+        
+        .info {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background: #2c3e50;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            height: 100px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        #currentTool {
+            font-size: 18px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h1>🎮 I Wanna 关卡编辑器</h1>
+        <p>当前工具: <span id="currentTool">橡皮擦</span></p>
+    </div>
+    
+    <div class="container">
+        <div class="tools">
+            <h3>🛠️ 工具箱</h3>
+            
+            <button class="tool-btn active" id="btn-erase">🧹 橡皮擦</button>
+            <button class="tool-btn" id="btn-brick">🧱 砖块</button>
+            <button class="tool-btn" id="btn-grass">🌱 草皮</button>
+            <button class="tool-btn" id="btn-spike_up">⬆️ 向上尖刺</button>
+            <button class="tool-btn" id="btn-spike_down">⬇️ 向下尖刺</button>
+            <button class="tool-btn" id="btn-spike_left">⬅️ 向左尖刺</button>
+            <button class="tool-btn" id="btn-spike_right">➡️ 向右尖刺</button>
+            <button class="tool-btn" id="btn-player">👤 玩家起点</button>
+            <button class="tool-btn" id="btn-save">💾 存档点</button>
+            
+            <hr style="margin: 15px 0;">
+            
+            <button class="tool-btn" id="btn-clear" style="background: #e67e22;">🗑️ 清空关卡</button>
+            <button class="tool-btn" id="btn-test" style="background: #27ae60;">▶️ 测试关卡</button>
+            <button class="tool-btn" id="btn-save-level" style="background: #9b59b6;">💾 保存关卡</button>
+            
+            <hr style="margin: 15px 0;">
+            
+            <label style="display: block; margin-bottom: 5px;">关卡名称:</label>
+            <input type="text" id="levelName" value="my_level">
+            
+            <label style="display: block; margin-bottom: 5px;">关卡数据:</label>
+            <textarea id="levelData" placeholder="关卡数据将显示在这里..."></textarea>
+            
+            <button class="tool-btn" id="btn-load" style="background: #f39c12;">📥 加载关卡</button>
+        </div>
+        
+        <div class="editor">
+            <canvas id="canvas" width="800" height="600"></canvas>
+            <div class="info">
+                <p>🖱️ 左键绘制 | 右键擦除</p>
+                <p id="mousePos">鼠标位置: (0, 0)</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let canvas, ctx;
+        let gridSize = 20;
+        let currentTool = 'erase';
+        let isDrawing = false;
+        let levelGrid = [];
+        let playerStart = {x: 1, y: 1};
+        
+        // 工具名称映射
+        const toolNames = {
+            'erase': '橡皮擦',
+            'brick': '砖块',
+            'grass': '草皮',
+            'spike_up': '向上尖刺',
+            'spike_down': '向下尖刺',
+            'spike_left': '向左尖刺',
+            'spike_right': '向右尖刺',
+            'player': '玩家起点',
+            'save': '存档点'
+        };
+        
+        // 初始化
+        function init() {
+            console.log('🎮 开始初始化编辑器...');
+            
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            setupGrid();
+            setupEvents();
+            setupButtons();
+            render();
+            
+            console.log('✅ 编辑器初始化完成');
+        }
+        
+        // 设置按钮事件
+        function setupButtons() {
+            // 工具按钮
+            document.getElementById('btn-erase').addEventListener('click', () => selectTool('erase'));
+            document.getElementById('btn-brick').addEventListener('click', () => selectTool('brick'));
+            document.getElementById('btn-grass').addEventListener('click', () => selectTool('grass'));
+            document.getElementById('btn-spike_up').addEventListener('click', () => selectTool('spike_up'));
+            document.getElementById('btn-spike_down').addEventListener('click', () => selectTool('spike_down'));
+            document.getElementById('btn-spike_left').addEventListener('click', () => selectTool('spike_left'));
+            document.getElementById('btn-spike_right').addEventListener('click', () => selectTool('spike_right'));
+            document.getElementById('btn-player').addEventListener('click', () => selectTool('player'));
+            document.getElementById('btn-save').addEventListener('click', () => selectTool('save'));
+            
+            // 功能按钮
+            document.getElementById('btn-clear').addEventListener('click', clearAll);
+            document.getElementById('btn-test').addEventListener('click', testLevel);
+            document.getElementById('btn-save-level').addEventListener('click', saveLevel);
+            document.getElementById('btn-load').addEventListener('click', loadLevel);
+        }
+        
+        // 工具选择
+        function selectTool(tool) {
+            console.log('选择工具:', tool);
+            
+            currentTool = tool;
+            document.getElementById('currentTool').textContent = toolNames[tool];
+            
+            // 更新按钮状态
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            const targetBtn = document.getElementById('btn-' + tool);
+            if (targetBtn) {
+                targetBtn.classList.add('active');
+            }
+        }
+        
+        // 设置网格
+        function setupGrid() {
+            const cols = Math.ceil(800 / gridSize);
+            const rows = Math.ceil(600 / gridSize);
+            
+            levelGrid = [];
+            for (let y = 0; y < rows; y++) {
+                levelGrid[y] = [];
+                for (let x = 0; x < cols; x++) {
+                    levelGrid[y][x] = null;
+                }
+            }
+        }
+        
+        // 设置事件
+        function setupEvents() {
+            canvas.addEventListener('mousedown', (e) => {
+                isDrawing = true;
+                handleDraw(e);
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                updateMousePos(e);
+                if (isDrawing) {
+                    handleDraw(e);
+                }
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                isDrawing = false;
+            });
+            
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const {gridX, gridY} = getGridPos(e);
+                setCell(gridX, gridY, null);
+            });
+        }
+        
+        // 获取网格位置
+        function getGridPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const gridX = Math.floor(x / gridSize);
+            const gridY = Math.floor(y / gridSize);
+            return {x, y, gridX, gridY};
+        }
+        
+        // 更新鼠标位置显示
+        function updateMousePos(e) {
+            const {x, y, gridX, gridY} = getGridPos(e);
+            document.getElementById('mousePos').textContent = 
+                `鼠标位置: (${Math.floor(x)}, ${Math.floor(y)}) | 格子: (${gridX}, ${gridY}) | 工具: ${toolNames[currentTool]}`;
+        }
+        
+        // 处理绘制
+        function handleDraw(e) {
+            const {gridX, gridY} = getGridPos(e);
+            
+            if (currentTool === 'player') {
+                playerStart = {x: gridX, y: gridY};
+                render();
+            } else {
+                const value = currentTool === 'erase' ? null : currentTool;
+                setCell(gridX, gridY, value);
+            }
+        }
+        
+        // 设置格子
+        function setCell(x, y, value) {
+            if (y >= 0 && y < levelGrid.length && x >= 0 && x < levelGrid[0].length) {
+                levelGrid[y][x] = value;
+                render();
+            }
+        }
+        
+        // 渲染
+        function render() {
+            // 清空画布
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, 800, 600);
+            
+            // 绘制网格线
+            drawGrid();
+            
+            // 绘制关卡元素
+            for (let y = 0; y < levelGrid.length; y++) {
+                for (let x = 0; x < levelGrid[y].length; x++) {
+                    const cell = levelGrid[y][x];
+                    if (cell) {
+                        drawCell(x, y, cell);
+                    }
+                }
+            }
+            
+            // 绘制玩家起点
+            drawPlayer(playerStart.x, playerStart.y);
+        }
+        
+        // 绘制网格线
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x <= 800; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, 600);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y <= 600; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(800, y);
+                ctx.stroke();
+            }
+        }
+        
+        // 绘制格子
+        function drawCell(gridX, gridY, type) {
+            const x = gridX * gridSize;
+            const y = gridY * gridSize;
+            
+            switch (type) {
+                case 'brick':
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x, y, gridSize, gridSize);
+                    ctx.fillStyle = '#A0522D';
+                    ctx.fillRect(x + 2, y + 2, gridSize - 4, gridSize - 4);
+                    break;
+                    
+                case 'grass':
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(x, y, gridSize, gridSize);
+                    ctx.fillStyle = '#228B22';
+                    ctx.fillRect(x, y, gridSize, gridSize / 2);
+                    break;
+                    
+                case 'spike_up':
+                    ctx.fillStyle = '#C0C0C0';
+                    ctx.beginPath();
+                    ctx.moveTo(x + gridSize/2, y);
+                    ctx.lineTo(x, y + gridSize);
+                    ctx.lineTo(x + gridSize, y + gridSize);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'spike_down':
+                    ctx.fillStyle = '#C0C0C0';
+                    ctx.beginPath();
+                    ctx.moveTo(x + gridSize/2, y + gridSize);
+                    ctx.lineTo(x, y);
+                    ctx.lineTo(x + gridSize, y);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'spike_left':
+                    ctx.fillStyle = '#C0C0C0';
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + gridSize/2);
+                    ctx.lineTo(x + gridSize, y);
+                    ctx.lineTo(x + gridSize, y + gridSize);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'spike_right':
+                    ctx.fillStyle = '#C0C0C0';
+                    ctx.beginPath();
+                    ctx.moveTo(x + gridSize, y + gridSize/2);
+                    ctx.lineTo(x, y);
+                    ctx.lineTo(x, y + gridSize);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                    
+                case 'save':
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(x + 2, y + 2, gridSize - 4, gridSize - 4);
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillRect(x + 4, y + 4, gridSize - 8, gridSize - 8);
+                    break;
+            }
+        }
+        
+        // 绘制玩家
+        function drawPlayer(gridX, gridY) {
+            const x = gridX * gridSize;
+            const y = gridY * gridSize;
+            
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(x + 2, y + gridSize/3, gridSize - 4, gridSize/2);
+            
+            ctx.fillStyle = '#FFDBAC';
+            ctx.fillRect(x + 3, y + 2, gridSize - 6, gridSize/3);
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x + 4, y + 4, 2, 2);
+            ctx.fillRect(x + gridSize - 6, y + 4, 2, 2);
+        }
+        
+        // 清空关卡
+        function clearAll() {
+            if (confirm('确定要清空整个关卡吗？')) {
+                setupGrid();
+                playerStart = {x: 1, y: 1};
+                render();
+                console.log('✅ 关卡已清空');
+            }
+        }
+        
+        // 保存关卡
+        function saveLevel() {
+            const levelName = document.getElementById('levelName').value || 'my_level';
+            
+            const levelData = {
+                name: levelName,
+                gridSize: gridSize,
+                width: levelGrid[0].length,
+                height: levelGrid.length,
+                playerStart: playerStart,
+                data: levelGrid,
+                created: new Date().toISOString()
+            };
+            
+            // 显示在文本框中
+            document.getElementById('levelData').value = JSON.stringify(levelData, null, 2);
+            
+            // 下载JSON文件
+            const jsonBlob = new Blob([JSON.stringify(levelData, null, 2)], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            const jsonLink = document.createElement('a');
+            jsonLink.href = jsonUrl;
+            jsonLink.download = levelName + '.json';
+            jsonLink.click();
+            
+            // 清理URL对象
+            setTimeout(() => {
+                URL.revokeObjectURL(jsonUrl);
+            }, 1000);
+            
+            console.log('✅ 关卡已保存:', levelName);
+            alert('关卡已保存到下载文件夹！');
+        }
+        
+        // 加载关卡
+        function loadLevel() {
+            try {
+                const jsonData = document.getElementById('levelData').value;
+                if (!jsonData.trim()) {
+                    alert('请先在文本框中粘贴关卡数据');
+                    return;
+                }
+                
+                const levelData = JSON.parse(jsonData);
+                
+                if (!levelData.data || !Array.isArray(levelData.data)) {
+                    throw new Error('无效的关卡数据格式');
+                }
+                
+                gridSize = levelData.gridSize || 20;
+                playerStart = levelData.playerStart || {x: 1, y: 1};
+                levelGrid = levelData.data;
+                
+                if (levelData.name) {
+                    document.getElementById('levelName').value = levelData.name;
+                }
+                
+                render();
+                
+                console.log('✅ 关卡加载成功:', levelData.name || '未命名关卡');
+                alert('关卡加载成功！');
+                
+            } catch (error) {
+                console.error('❌ 关卡加载失败:', error);
+                alert('关卡加载失败：' + error.message);
+            }
+        }
+        
+        // 测试关卡
+        function testLevel() {
+            const levelName = document.getElementById('levelName').value || 'test_level';
+            
+            const levelData = {
+                name: levelName,
+                gridSize: gridSize,
+                width: levelGrid[0].length,
+                height: levelGrid.length,
+                playerStart: playerStart,
+                data: levelGrid
+            };
+            
+            // 简化的测试HTML
+            const htmlContent = generateTestHTML(levelData);
+            const newWindow = window.open('', '_blank');
+            newWindow.document.write(htmlContent);
+            newWindow.document.close();
+            
+            console.log('✅ 关卡测试已启动');
+        }
+        
+        // 生成测试HTML
+        function generateTestHTML(levelData) {
+            return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>I Wanna - ' + levelData.name + '</title></head><body><div><h1>🎮 I Wanna - ' + levelData.name + '</h1><p>测试关卡</p></div><canvas id="game" width="800" height="600"></canvas></body></html>';
+        }
+        
+        // 启动编辑器
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
